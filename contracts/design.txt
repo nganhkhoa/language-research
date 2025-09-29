@@ -1,0 +1,10 @@
+The language is similar to the Higher-Order Contract, although with some trick to make parsing simpler.
+
+Because we use the racket s-expression system to assist parsing, it works best if everything is a list, so all expressions are wrapped to make it a list (for now). With that, adapting the sample program in the paper turns into:
+
+```
+(val rec gt9 = (lambda x (x >= 9)))
+(val rec bet0_99 = (lambda x (if (99 >= x) then (x >= 0) else #f)))
+(val rec g : ((gt9 -> bet0_99) -> bet0_99) = (lambda f (f 0)))
+(g (lambda x 25))
+```
