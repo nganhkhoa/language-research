@@ -66,7 +66,7 @@
              ['hd (head (parse snd))]
              ['td (tail (parse snd))]
              ['mt (mt (parse snd))]
-             ['contract (construct-contract (parse snd))]
+             ['contract (f-contract (parse snd))]
              ['flatp (flatp (parse snd))]
              ['pred (pred (parse snd))]
              ['dom (dom (parse snd))]
@@ -87,7 +87,7 @@
           [(is-rop? snd) (rop snd (parse fst) (parse rd))]
           [(is-con? snd) (concat (parse fst) (parse rd))]
           ;; contract parsing
-          [(is-contract? snd) (high-contract (parse fst) (parse rd))]
+          [(is-contract? snd) (h-contract (parse fst) (parse rd))]
           [else
             (error 'parse
                    "expected either lambda, fix, aop, rop, or :: at ~a" s-expr)])]
@@ -104,7 +104,7 @@
   (match s-expr
     ;; no contract
     [(list 'val 'rec x '= e)
-     (val x (nil) (parse e))]
+     (val x (f-contract (function '_ (bool true))) (parse e))]
     ;; with contract
     [(list 'val 'rec x ': c '= e)
      (val x (parse c) (parse e))]
@@ -162,8 +162,8 @@
 
   (test (parse-decl `{val rec g : ((gt9 -> bet0_99) -> bet0_99) = (lambda f (f 0))})
         (val 'g
-             (high-contract (high-contract (id 'gt9) (id 'bet0_99))
-                            (id 'bet0_99))
+             (h-contract (h-contract (id 'gt9) (id 'bet0_99))
+                         (id 'bet0_99))
              (function 'f (application (id 'f) (num 0)))))
 
 )

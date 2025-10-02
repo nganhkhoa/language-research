@@ -34,12 +34,16 @@
   [tail (lst rize-expr?)]
   [mt (lst rize-expr?)]
   ;; contracts
-  [high-contract (from rize-expr?)
+  [h-contract (from rize-expr?)
                   (to rize-expr?)]
-  [construct-contract (c rize-expr?)]
+  [f-contract (c rize-expr?)]
   [flatp (c rize-expr?)]
   [pred (c rize-expr?)]
   [dom (c rize-expr?)]
   [rng (c rize-expr?)]
-  [blame (c rize-expr?)])
+  [blame (c rize-expr?)]
+  [obligation (e rize-expr?)
+              (c rize-expr?)
+              (blame-in symbol?)
+              (blame-out symbol?)])
 
