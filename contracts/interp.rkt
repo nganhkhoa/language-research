@@ -101,6 +101,11 @@
              [rop (op left right) (perform-op op
                                               (interp-expr-> left state)
                                               (interp-expr-> right state))]
+             [condition (e t f)
+                        ;; type check should guard if not correct type
+                        (cond (rz-bool-b (interp-expr-> e state))
+                          [true (interp-expr-> t state)]
+                          [false (interp-expr-> f state)])]
              [function (arg body) (rz-function arg body)]
              [application (fun arg)
                           (define v-fun (interp-expr-> fun state))
@@ -115,27 +120,46 @@
                                                 (rz-obligation-c v-fun))
                                               (rz-obligation-blame-out v-fun)
                                               (rz-obligation-blame-in v-fun)))
-                             ;; will raise error if contract violation
-                             (rewrite-obligation-value arg-monitor state)
-                             ;; continue applying
-                             (define function (rz-obligation-v v-fun))
-                             (define arg (rz-function-id function))
-                             (define body (rz-function-body function))
-                             (define result
-                               (interp-expr->
-                                 (subst arg (convert-expr v-arg) body)
-                                 state))
-                             ;; check result
-                             (rewrite-obligation-value
-                               (rz-obligation result
-                                              (rz-contract-high-to
-                                                (rz-obligation-c v-fun))
-                                              (rz-obligation-blame-in v-fun)
-                                              (rz-obligation-blame-out v-fun))
-                               state)
-
-
-                             ]
+                             (cond
+                               [(rz-contract-high? (rz-obligation-c arg-monitor))
+                                ;; this is a high contract, we treat it as a value
+                                (define function (rz-obligation-v v-fun))
+                                (define arg (rz-function-id function))
+                                (define body (rz-function-body function))
+                                (printf "hoc apply ~a ~a ~a\n" arg body arg-monitor)
+                                (define result
+                                  (interp-expr->
+                                    (subst arg (convert-expr arg-monitor) body)
+                                    state))
+                                (printf "hoc result ~a\n" result)
+                                (define wrapped
+                                  (rz-obligation result
+                                                 (rz-contract-high-to
+                                                   (rz-obligation-c v-fun))
+                                                 (rz-obligation-blame-in v-fun)
+                                                 (rz-obligation-blame-out v-fun)))
+                                (interp-expr-> wrapped state)]
+                               [(rz-contract? (rz-obligation-c arg-monitor))
+                                ;; this is a single contract, rewrite using
+                                ;; obligation reduction rule
+                                ;; V1^{contract(V2)} -> if V2(V1) then V2 else blame
+                                (rewrite-obligation-value arg-monitor state)
+                                ;; continue applying
+                                (define function (rz-obligation-v v-fun))
+                                (define arg (rz-function-id function))
+                                (define body (rz-function-body function))
+                                (define result
+                                  (interp-expr->
+                                    (subst arg (convert-expr v-arg) body)
+                                    state))
+                                ;; check result
+                                (rewrite-obligation-value
+                                  (rz-obligation result
+                                                 (rz-contract-high-to
+                                                   (rz-obligation-c v-fun))
+                                                 (rz-obligation-blame-in v-fun)
+                                                 (rz-obligation-blame-out v-fun))
+                                  state)])]
                              ;; (printf "value obligation ~a\n" arg-monitor)
                              ;; (define v-arg-monitor (interp-expr-> arg-monitor state))
                              ;; (printf "value monitor ~a\n" v-arg-monitor)
@@ -151,8 +175,14 @@
                             ;;  ()]
                             ;; or a fix
                             [else error 'interp "cannot apply a non-function ~a" fun])]
-             [obligation (e c blame-in blame-out)
-                         (error 'interp "hmmge ~a" expr)]
+             ;; if an obligation we don't do anything
+             ;; the rule is in application rewrite
+             ;; which we should think hard whether or not should we interp this
+             ;; but an obligation alone has no meaning
+             [obligation (v c in out)
+                         (rz-obligation (interp-expr-> v state)
+                                        (interp-expr-> c state)
+                                        in out)]
              [else (error 'interp "unimplemented ~a" expr)]))
 
 (define (perform-op (op symbol?) (left rize-value?) (right rize-value?))
@@ -177,9 +207,14 @@
   (define c (rz-obligation-c value))
   (define blame-in (rz-obligation-blame-in value))
   (define blame-out (rz-obligation-blame-in value))
-  ;; (printf "obligation for ~a\n" v)
-  ;; (printf "contract is ~a\n" c)
+  (printf "obligation for ~a\n" v)
+  (printf "contract is ~a\n" c)
   ;; TODO: it could be applying a wrong contract type?
+
+  ;; (define this-contract
+  ;;   (cond
+  ;;     [(rz-contract? c) (rz-contract-c c)]
+  ;;     [(rz-contract-high? c) (rz-contract-high-from c)]))
   (define guard (guard-evaluation (rz-contract-c c) v state))
   (cond
     [(rz-bool? guard)
@@ -201,8 +236,8 @@
                          (rz-contract (interp-expr-> e state))]
              [h-contract (f t)
                          (rz-contract-high
-                           (rz-contract (interp-contract f state))
-                           (rz-contract (interp-contract t state)))]
+                           (interp-contract f state)
+                           (interp-contract t state))]
              [else (error 'interp
                           "cannot resolve contract ~a" contract)]))
 
@@ -215,6 +250,8 @@
                           (printf "contract guard body ~a\n" body)
                           (interp-expr-> (subst arg (convert-expr v) body) state)]
              [rz-bool (b) b]
+             ;; coming from higher order contract
+             [rz-contract (c) (guard-evaluation c v state)]
              [else (error 'guard
                           "guard was passed in a non-contract equivalent ~a" f)]))
 
@@ -228,7 +265,13 @@
              [rz-list (ls) (nil)]
              [rz-function (arg body)
                           (function arg body)]
-             [else (error 'guard "cannot convert value to expr ~a" v)]))
+             [rz-obligation (v c in out)
+                            (obligation (convert-expr v)
+                                        (convert-expr c)
+                                        in out)]
+             [rz-contract-high (f t)
+                               (h-contract (convert-expr f) (convert-expr t))]
+             [rz-contract (c) (f-contract (convert-expr c))]))
 
 (define (subst arg value expr)
   (type-case rize-expr expr
@@ -256,6 +299,9 @@
                        (if (eq? name arg)
                            expr
                            (function name (subst arg value body)))]
+             [application (name body)
+                          (application (subst arg value name)
+                                       (subst arg value body))]
              ;; will error when interp if not correct
              [else expr]))
 
