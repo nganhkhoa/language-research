@@ -7,6 +7,7 @@
 
 (define-type rize-expr
   ;; basic types
+  [comment]
   [num (n number?)]
   [id (name symbol?)]
   [str (s string?)]

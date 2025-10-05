@@ -36,7 +36,6 @@
                  'flatp 'pred 'dom 'rng 'blame]))
 
 (define (parse s-expr)
-  ; (printf "parsing expr ~v\n" s-expr)
   (cond
     [(number? s-expr) (num s-expr)]
     [(string? s-expr) (str s-expr)]
@@ -55,6 +54,8 @@
     ;; because we expect an expression, so it should simple to parse
     [(list? s-expr)
      (match s-expr
+       ;; ignore any comment first
+       [(list 'comment _ ...) (comment)]
        ; application has 2 arguments
        [(list fst snd)
         (cond
@@ -72,7 +73,7 @@
              ['dom (dom (parse snd))]
              ['rng (rng (parse snd))]
              ['blame (blame (parse snd))]
-             [else (application (id fst) (parse snd))])]
+             [_ (application (id fst) (parse snd))])]
           ;; fst argument is an expression (aka lambda), so parse
           [else (application (parse fst) (parse snd))])]
 
@@ -91,12 +92,10 @@
           [else
             (error 'parse
                    "expected either lambda, fix, aop, rop, or :: at ~a" s-expr)])]
-
        ; if expression has 6 arguments
        [(list 'if b 'then t 'else f)
         (condition (parse b) (parse t) (parse f))]
-
-       [else (error 'parse "cannot parse ~a" s-expr)])]
+       [_ (error 'parse "cannot parse ~a" s-expr)])]
     [else (error 'parse "cannot parse ~a" s-expr)]))
 
 (define (parse-decl s-expr)
@@ -108,7 +107,7 @@
     ;; with contract
     [(list 'val 'rec x ': c '= e)
      (val x (parse c) (parse e))]
-    [else (error 'parse "cannot parse declaration ~a" s-expr)]))
+    [_ (error 'parse "cannot parse declaration ~a" s-expr)]))
 
 (module+ test
 
