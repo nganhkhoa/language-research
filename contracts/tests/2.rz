@@ -1,4 +1,4 @@
 (val rec gt0 = (lambda x (x >= 0)))
 (val rec gt10 = (lambda x (x >= 10)))
-(val rec g : (gt10 -> gt0) = (lambda x (x - 10)))
+(val rec g : ((contract gt10) -> (contract gt0)) = (lambda x (x - 10)))
 (g 11)

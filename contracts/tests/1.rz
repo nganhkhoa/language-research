@@ -1,4 +1,8 @@
 (val rec gt9 = (lambda x (x >= 9)))
 (val rec bet0_99 = (lambda x (if (99 >= x) then (x >= 0) else #f)))
-(val rec g : ((gt9 -> bet0_99) -> bet0_99) = (lambda f (f 0)))
-(g (lambda x 25))
+(val rec g : (((contract gt9) -> (contract bet0_99)) -> (contract bet0_99)) = (lambda f (f 0)))
+
+(comment g (lambda x 25))
+
+
+(g (lambda x 111))
