@@ -1,11 +1,10 @@
 #lang racket
 
 (require racket/base)
-(require racket/exn)
 
 (require "ast.rkt")
 (require "parser.rkt")
-(require "interp-new.rkt")
+(require "interp.rkt")
 (require "transformer.rkt")
 
 (define (read-file path)
@@ -21,7 +20,7 @@
   (define (try-parse-element s-expr)
     (with-handlers
       ([exn:fail?
-         (lambda (exn) (parse s-expr))])
+         (lambda (_) (parse s-expr))])
       (parse-decl s-expr)))
   (map try-parse-element program-expr))
 
@@ -40,8 +39,8 @@
             [exprs (filter (lambda (x) (not (comment? x))) exprs)]
             [program-ready (transform exprs decls)]
             ; TODO: Type check
-            [result (run program-ready)])
-       (printf "Program Result: ~a~n" result))]
+            [_ (run program-ready)])
+       (printf "Complete\n"))]
 
     [else
      (printf "Too many arguments.~n")]))

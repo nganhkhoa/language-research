@@ -8,13 +8,13 @@
     ['- true]
     ['- true]
     ['/ true]
-    [else false]))
+    [_ false]))
 
 (define (is-aop? (op symbol?))
   (match op
     ['>= true]
     ['= true]
-    [else false]))
+    [_ false]))
 
 (define (is-con? (op symbol?))
   (eq? ':: op))

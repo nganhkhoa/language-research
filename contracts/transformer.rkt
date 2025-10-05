@@ -1,7 +1,6 @@
 #lang plai
 
 (require "ast.rkt")
-; (require "interp-new.rkt")
 
 (define (find-decl (name symbol?) (decls (listof rize-decl?)))
   (match decls
