@@ -5,7 +5,8 @@
 
 (require "ast.rkt")
 (require "parser.rkt")
-(require "interp.rkt")
+(require "interp-new.rkt")
+(require "transformer.rkt")
 
 (define (read-file path)
   (with-input-from-file path
@@ -33,11 +34,13 @@
      (let* ([file-path (first args)]
             [program-text (read-file file-path)]
             [program-expr (program-text->datum program-text)]
-            ; 1. Parse the program text
             [program (try-parse program-expr)]
-            ; TODO: 2. Type check AST
-            ; 3. Interpret the AST
-            [result (run program)])
+            [decls (filter rize-decl? program)]
+            [exprs (filter rize-expr? program)]
+            [exprs (filter (lambda (x) (not (comment? x))) exprs)]
+            [program-ready (transform exprs decls)]
+            ; TODO: Type check
+            [result (run program-ready)])
        (printf "Program Result: ~a~n" result))]
 
     [else
