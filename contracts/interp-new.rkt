@@ -183,11 +183,20 @@
                       (error 'interp "contract violation ~a of ~a by ~a"
                              c v (if is-in in out))))
   (type-case rize-expr value
-    ;; [function (param body) (interp (subst param value body))]
+    ;; this can be h-contract also
+    ;; the reason why is when you call a function with a function
+    ;; f: (a -> b) -> c
+    ;; f g
+    ;; then g will have high contract obligation
+    ;; which we don't really care, we just gonna replace g inside f
+    ;; while also placing obligation on g
     [obligation (v c in out)
-      (type-case rz-value (interp-apply (interp (f-contract-c c)) v)
-        [rz-bool (b) (if b v (error-msg v c in out))]
-        [else (error 'interp "contract must return bool (type-check)")])]
+      (cond
+        [(f-contract? c)
+         (type-case rz-value (interp-apply (interp (f-contract-c c)) v)
+           [rz-bool (b) (if b v (error-msg v c in out))]
+           [else (error 'interp "contract must return bool (type-check)")])]
+        [(h-contract? c) v])]
     [else (error 'interp "contract guard apply to a non-obligation ~a" value)]))
 
 (define (perform-op (op symbol?) (left rz-value?) (right rz-value?))
