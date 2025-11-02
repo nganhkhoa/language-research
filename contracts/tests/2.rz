@@ -1,4 +1,15 @@
+(comment
+  g expects a number >=10 and guarantees output a number >=0
+
+  if g 9
+    then blame main because someone outside gives g wrong argument
+
+  if g = lambda x. x - 20 and g 11
+    then blame g because g must return something bigger than 0
+)
+
 (val rec gt0 = (lambda x (x >= 0)))
 (val rec gt10 = (lambda x (x >= 10)))
-(val rec g : ((contract gt10) -> (contract gt0)) = (lambda x (x - 10)))
+(val rec g : ((contract gt10) -> (contract gt0)) = (lambda x (x - 20)))
+
 (g 11)

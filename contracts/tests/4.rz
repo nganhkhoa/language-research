@@ -1,6 +1,9 @@
 (comment
   function that returns a contract
   and use that contract in a contract signature
+
+  instead of hardcoding gt10 lt15, use gt lt and provides argument
+  we can make complex contract by composing expressions
 )
 
 (val rec gt = (lambda v (lambda x (x >= v))))

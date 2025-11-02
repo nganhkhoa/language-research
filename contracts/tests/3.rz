@@ -12,14 +12,13 @@
   someone must give g a number gt10
   g must return something gt10 and lt15
 
-  11 is someone
-  x - 10 is g output, and g must make sure x - 10 gt10 and lt15
+  main is someone and gives 11
+  x - 10 is g output, and g must make sure x - 10 satisfies gt10 and lt15
   but it is not, so g is to blame
 )
 
 (val rec g
   : ((contract gt10) -> (contract (lambda x ((and (gt10 x)) (lt15 x)))))
   = (lambda x (x - 10)))
-  (comment = (lambda x 9))
 
 (g 11)

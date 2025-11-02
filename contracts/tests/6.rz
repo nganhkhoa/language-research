@@ -1,14 +1,18 @@
 (comment dependent contract)
 
-(val rec gt10 = (lambda x (x >= 10)))
-(val rec gt20 = (lambda x (x >= 20)))
-(val rec and = (lambda x (lambda y (if x then y else #f))))
+(val rec gt100 = (lambda x (x >= 100)))
 
 (comment
   g accepts everything
-  but on output, it also check with the input
+  but on output, it also check with the input if input + output >= 100
+
+  g = lambda x. x + 80
+
+    g 5 -> 85, 5 + 85 < 100
+    g 10 -> 90, 10 + 90 >= 100
 )
+
 (val rec g
-  : ((contract (lambda x #t)) d-> (lambda x (contract (lambda result ((and (gt10 x)) (gt20 result))))))
-  = (lambda x (x + 21)))
-(g 5)
+  : ((contract (lambda x #t)) d-> (lambda x (contract (lambda result (gt100 (x + result))))))
+  = (lambda x (x + 80)))
+(g 10)

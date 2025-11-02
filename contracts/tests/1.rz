@@ -1,8 +1,19 @@
+(comment
+  example from paper
+  somebody must give g a function
+  this function must receive a number >9 and must return 0<=x<=9
+
+  if g = lambda f. f 0
+    g uses the function with 0, which is the fault of g
+
+  if g (lambda x 101)
+    g uses the function with 0, good
+    the function returns 101 not correct output
+    the function comes from main
+)
+
 (val rec gt9 = (lambda x (x >= 9)))
 (val rec bet0_99 = (lambda x (if (99 >= x) then (x >= 0) else #f)))
 (val rec g : (((contract gt9) -> (contract bet0_99)) -> (contract bet0_99)) = (lambda f (f 10)))
 
-(g (lambda x 25))
-
-
-(g (lambda x 111))
+(g (lambda x 101))
