@@ -1,11 +1,11 @@
 #lang plai
 
-(define-type rize-decl
+(define-type rz-decl
   [val (id symbol?)
-       (contract rize-expr?)
-       (expr rize-expr?)])
+       (contract rz-expr?)
+       (expr rz-expr?)])
 
-(define-type rize-expr
+(define-type rz-expr
   ;; basic types
   [comment]
   [num (n number?)]
@@ -15,36 +15,36 @@
   [nil]
   ;; main language feature
   [function (arg symbol?)
-            (expr rize-expr?)]
+            (expr rz-expr?)]
   [fixpoint (arg symbol?)
-            (expr rize-expr?)]
-  [application (func rize-expr?)
-               (arg rize-expr?)]
-  [condition (e rize-expr?)
-             (true-branch rize-expr?)
-             (false-branch rize-expr?)]
+            (expr rz-expr?)]
+  [application (func rz-expr?)
+               (arg rz-expr?)]
+  [condition (e rz-expr?)
+             (true-branch rz-expr?)
+             (false-branch rz-expr?)]
   [aop (op symbol?)
-       (left rize-expr?)
-       (right rize-expr?)]
+       (left rz-expr?)
+       (right rz-expr?)]
   [rop (op symbol?)
-       (left rize-expr?)
-       (right rize-expr?)]
-  [concat (left rize-expr?)
-          (right rize-expr?)]
-  [head (lst rize-expr?)]
-  [tail (lst rize-expr?)]
-  [mt (lst rize-expr?)]
+       (left rz-expr?)
+       (right rz-expr?)]
+  [concat (left rz-expr?)
+          (right rz-expr?)]
+  [head (lst rz-expr?)]
+  [tail (lst rz-expr?)]
+  [mt (lst rz-expr?)]
   ;; contracts
-  [h-contract (from rize-expr?)
-                  (to rize-expr?)]
-  [f-contract (c rize-expr?)]
-  [flatp (c rize-expr?)]
-  [pred (c rize-expr?)]
-  [dom (c rize-expr?)]
-  [rng (c rize-expr?)]
-  [blame (c rize-expr?)]
-  [obligation (e rize-expr?)
-              (c rize-expr?)
+  [h-contract (from rz-expr?)
+                  (to rz-expr?)]
+  [f-contract (c rz-expr?)]
+  [flatp (c rz-expr?)]
+  [pred (c rz-expr?)]
+  [dom (c rz-expr?)]
+  [rng (c rz-expr?)]
+  [blame (c rz-expr?)]
+  [obligation (e rz-expr?)
+              (c rz-expr?)
               (blame-in symbol?)
               (blame-out symbol?)])
 
