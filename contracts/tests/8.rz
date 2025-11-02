@@ -1,0 +1,44 @@
+(comment
+  multi-layered obligation with function
+)
+
+(val rec gt = (lambda v (lambda x (x >= v))))
+(val rec lt = (lambda v (lambda x (if (x >= v) then #f else #t))))
+(val rec and = (lambda x (lambda y (if x then y else #f))))
+(val rec or = (lambda x (lambda y (if x then #t else y))))
+
+(comment
+  must give g f that satisfies anything -> lt10
+  g output something gt30
+  f must satisfies gt10 -> gt20
+  g uses f with a number
+
+  g = lambda f. f 9
+  f = lambda x. x
+    blame g because g provides f with 9? but it blames main
+
+  g = lambda f. f 15
+  f = lambda x. x
+    input correct, output wrong, blame f because f must returns gt20
+
+  g = lambda f. f 20
+  f = lambda x. x
+    f 20, input correct, output correct
+    but g must output gt30, blame g
+
+  g = lambda f. f 30
+  f = lambda x. x
+    pass
+)
+
+(val rec secret = 9)
+
+(val rec g
+  : (((contract (lambda x #t)) -> (contract (gt 10))) -> (contract (gt 30)))
+  = (lambda f (f secret)))
+
+(val rec f
+  : ((contract (gt 10)) -> (contract (gt 20)))
+  = (lambda x x))
+
+(g f)

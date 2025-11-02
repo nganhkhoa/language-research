@@ -141,6 +141,21 @@
          rz-value
          function
          [rz-function (param body) (interp (subst param argument body) decls)]
+         [rz-obligation
+          (v c in out)
+          ;; make new obligation value yay, similar to interp application
+          (cond
+            [(rz-hcontract? c)
+             (define arg-guard (obligation-reduce (rz-obligation argument (rz-hcontract-dom c) out in) decls))
+             (obligation-reduce (rz-obligation (rz-app v arg-guard) (rz-hcontract-rng c) in out) decls)]
+            [(rz-dcontract? c)
+             (define arg-guard (obligation-reduce (rz-obligation argument (rz-dcontract-arg-c c) out in) decls))
+             (define ret-guard
+               (type-case rz-value (rz-dcontract-ret-c c)
+                          [rz-function (param body) (interp (subst param argument body) decls)] ;; function returns contract
+                          [else (error 'interp "dependent contract must be a function but ~a" (rz-dcontract-ret-c c))]))
+             (obligation-reduce (rz-obligation (rz-app v arg-guard) ret-guard in out) decls)]
+            [else (error 'interp "expecting obligation but ~a" function)])]
          [else (error 'interp "higher order contract works with function only not ~a" function)])]
        [else v]))
     (cond

@@ -1,0 +1,32 @@
+(comment multi-layered obligation
+  this time with unsatisfiable constraints
+)
+
+(val rec gt = (lambda v (lambda x (x >= v))))
+(val rec lt = (lambda v (lambda x (if (x >= v) then #f else #t))))
+(val rec and = (lambda x (lambda y (if x then y else #f))))
+(val rec or = (lambda x (lambda y (if x then #t else y))))
+
+(comment
+  g must satisfies gt15 -> lt20
+  f must satisfies gt10 -> gt30
+  g uses f with a number
+
+  this cannot be satisfied, the output is both lt20 and gt30
+
+  g 9, not satisfies gt10, blame whoever gives f 9, g
+  g 11, not satisfies gt15, blame whoever gives g 11, main
+  g 17, not satisfies both gt20 and lt30, blame first encounter f
+  g 21, not satisfies gt30, blame f
+  g 30, not satisfies lt20, blame g
+)
+
+(val rec g
+  : ((contract (gt 15)) -> (contract (lt 20)))
+  = (lambda x (f x)))
+
+(val rec f
+  : ((contract (gt 10)) -> (contract (gt 30)))
+  = (lambda x x))
+
+(g 30)
