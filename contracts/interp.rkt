@@ -14,6 +14,7 @@
              [rz-app (funclike rz-value?) (arg rz-value?)]
              [rz-fcontract (c rz-value?)]
              [rz-hcontract (dom rz-value?) (rng rz-value?)]
+             [rz-dcontract (arg-c rz-value?) (ret-c rz-value?)]
              [rz-obligation (v rz-value?) (c rz-value?) (in symbol?) (out symbol?)])
 
 (define (run (program (listof rz-expr?)) (decls (listof rz-decl?)))
@@ -88,12 +89,23 @@
      [rz-obligation
       (v c in out)
       ;; make new obligation value yay
-      (unless (rz-hcontract? c)
-        (error 'interp "expecting a higher order contract to apply"))
-      (define arg-guard (obligation-reduce (rz-obligation a (rz-hcontract-dom c) out in) decls))
-      (obligation-reduce (rz-obligation (rz-app v arg-guard) (rz-hcontract-rng c) in out) decls)]
+      (cond
+        [(rz-hcontract? c)
+         (define arg-guard (obligation-reduce (rz-obligation a (rz-hcontract-dom c) out in) decls))
+         (obligation-reduce (rz-obligation (rz-app v arg-guard) (rz-hcontract-rng c) in out) decls)]
+        [(rz-dcontract? c)
+         (define arg-guard (obligation-reduce (rz-obligation a (rz-dcontract-arg-c c) out in) decls))
+         (printf "ret-guard ~a ~a\n" (rz-dcontract-ret-c c) a)
+         (define ret-guard
+           (type-case rz-value (rz-dcontract-ret-c c)
+                      [rz-function (param body) (interp (subst param a body) decls)] ;; function returns contract
+                      [else (error 'interp "dependent contract must be a function but ~a" (rz-dcontract-ret-c c))]))
+         (printf "ret-guard ~a\n" ret-guard)
+         (obligation-reduce (rz-obligation (rz-app v arg-guard) ret-guard in out) decls)]
+        [else (error 'interp "expecting obligation but ~a" f)])]
      [else (error 'interp "cannot call a non-callable value ~a" f)])]
    [h-contract (dom rng) (rz-hcontract (interp dom decls) (interp rng decls))]
+   [d-contract (arg-check ret-check) (rz-dcontract (interp arg-check decls) (interp ret-check decls))]
    [f-contract (c) (rz-fcontract (interp c decls))]
    [obligation
     (e c in out)
@@ -137,6 +149,7 @@
     (cond
       ;; high order contract, e must be a call-able or rz-app
       [(rz-hcontract? c) (rz-obligation reduced-v c in out)]
+      [(rz-dcontract? c) (rz-obligation reduced-v c in out)]
       [(rz-fcontract? c)
        ;; flat contract, e must be a basic value
        (type-case
@@ -254,6 +267,9 @@
         expr
         (function name (subst arg value body)))]
    [application (name body) (application (subst arg value name) (subst arg value body))]
+   [f-contract (c) (f-contract (subst arg value c))]
+   [h-contract (d r) (h-contract (subst arg value d) (subst arg value r))]
+   [d-contract (d r) (d-contract (subst arg value d) (subst arg value r))]
    ;; will error when interp if not correct
    [else expr]))
 (trace subst)

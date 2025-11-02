@@ -25,8 +25,11 @@
 (define (is-fix? (op symbol?))
   (eq? 'fix op))
 
-(define (is-contract? (op symbol?))
+(define (is-hcontract? (op symbol?))
   (eq? '-> op))
+
+(define (is-dcontract? (op symbol?))
+  (eq? 'd-> op))
 
 (define (is-keyword? (name symbol?))
   (member name '['hd 'td 'mt 'lambda 'fix 'if 'then 'else 'contract 'flatp 'pred 'dom 'rng 'blame]))
@@ -42,7 +45,8 @@
              (is-aop? s-expr)
              (is-lambda? s-expr)
              (is-fix? s-expr)
-             (is-contract? s-expr)
+             (is-hcontract? s-expr)
+             (is-dcontract? s-expr)
              (is-keyword? s-expr))
          (error 'parse "cannot use name ~a" s-expr)
          (id s-expr))]
@@ -82,7 +86,8 @@
           [(is-rop? snd) (rop snd (parse fst) (parse rd))]
           [(is-con? snd) (concat (parse fst) (parse rd))]
           ;; contract parsing
-          [(is-contract? snd) (h-contract (parse fst) (parse rd))]
+          [(is-hcontract? snd) (h-contract (parse fst) (parse rd))]
+          [(is-dcontract? snd) (d-contract (parse fst) (parse rd))]
           [else (error 'parse "expected either lambda, fix, aop, rop, or :: at ~a" s-expr)])]
        ; if expression has 6 arguments
        [(list 'if b 'then t 'else f) (condition (parse b) (parse t) (parse f))]

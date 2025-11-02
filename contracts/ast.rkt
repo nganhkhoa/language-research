@@ -23,6 +23,7 @@
              [mt (lst rz-expr?)]
              ;; contracts
              [h-contract (from rz-expr?) (to rz-expr?)]
+             [d-contract (from rz-expr?) (to rz-expr?)]
              [f-contract (c rz-expr?)]
              [flatp (c rz-expr?)]
              [pred (c rz-expr?)]

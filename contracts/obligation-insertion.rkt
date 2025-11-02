@@ -89,6 +89,10 @@
               (domain range)
               (h-contract (do-obligation-insert domain decls outer-name shadow-names)
                           (do-obligation-insert range decls outer-name shadow-names))]
+             [d-contract
+              (domain range)
+              (d-contract (do-obligation-insert domain decls outer-name shadow-names)
+                          (do-obligation-insert range decls outer-name shadow-names))]
              [f-contract (c) (f-contract (do-obligation-insert c decls outer-name shadow-names))]
              [pred (c) (f-contract (do-obligation-insert c decls outer-name shadow-names))]
              [dom (c) (f-contract (do-obligation-insert c decls outer-name shadow-names))]
