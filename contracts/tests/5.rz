@@ -1,0 +1,4 @@
+(comment variables can be restricted with contracts)
+(val rec gt10 = (lambda x (x >= 10)))
+(val rec x : (contract gt10) = 9)
+x

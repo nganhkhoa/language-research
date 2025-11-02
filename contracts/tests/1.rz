@@ -1,6 +1,6 @@
 (val rec gt9 = (lambda x (x >= 9)))
 (val rec bet0_99 = (lambda x (if (99 >= x) then (x >= 0) else #f)))
-(val rec g : (((contract gt9) -> (contract bet0_99)) -> (contract bet0_99)) = (lambda f (f 0)))
+(val rec g : (((contract gt9) -> (contract bet0_99)) -> (contract bet0_99)) = (lambda f (f 10)))
 
 (g (lambda x 25))
 

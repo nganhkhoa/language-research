@@ -2,12 +2,20 @@
   a complex contract function
 )
 
-
 (val rec gt0 = (lambda x (x >= 0)))
 (val rec gt10 = (lambda x (x >= 10)))
 (val rec lt15 = (lambda x (if (x >= 15) then #f else #t)))
 (val rec and = (lambda x (lambda y (if x then y else #f))))
 (val rec or = (lambda x (lambda y (if x then true else y))))
+
+(comment
+  someone must give g a number gt10
+  g must return something gt10 and lt15
+
+  11 is someone
+  x - 10 is g output, and g must make sure x - 10 gt10 and lt15
+  but it is not, so g is to blame
+)
 
 (val rec g
   : ((contract gt10) -> (contract (lambda x ((and (gt10 x)) (lt15 x)))))
@@ -15,93 +23,3 @@
   (comment = (lambda x 9))
 
 (g 11)
-
-(comment
-  should be something like this in formula
-
-  (lambda x (x >= 10))^{true, gt10, g}
-  -> (lambda x ((
-       (lambda x (lambda y) (if x then y else false))^{true, and, g} (
-         (lambda x (x >= 10))^{true, gt10, g}
-     )))
-       (lambda x (if (x >= 15) then false else true))^{true, lt15, g}
-))
-
-(comment
-  compiled
-
-  (struct:val
-  ;; this is the function name
-  g
-
-  ;; this is the contract for g
-  #(struct:h-contract
-    ;; a high order contract from this
-    #(struct:f-contract
-      ;; compiled into obligation
-      #(struct:obligation
-        ;; body of the obligation
-        #(struct:function x #(struct:aop >= #(struct:id x) #(struct:num 10)))
-        ;; contract of the obligation, body can only run if this passes
-        #(struct:f-contract #(struct:function _ #(struct:bool #t)))
-        ;; the function it self, passed in to inner obligations when neccessary
-        gt10
-        ;; the outer function, if contract does not pass for blaming
-        g
-      ))
-
-    ;; the second clause of the high order contract of g
-    #(struct:f-contract
-      ;; this contract is some lambda function receiving the output of g
-      #(struct:function x
-        #(struct:application
-          #(struct:application
-            ;; obligation of and
-            #(struct:obligation
-              ;; body of and
-              #(struct:function x #(struct:application #(struct:application #(struct:id lambda) #(struct:id y)) #(struct:condition #(struct:id x) #(struct:id y) #(struct:id false))))
-              ;; contract of and
-              #(struct:f-contract #(struct:function _ #(struct:bool #t)))
-              ;; and function name for blaming
-              and
-              ;; blame if inputs to and is wrong
-              g)
-            #(struct:application
-              ;; obligation for gt10
-              #(struct:obligation
-                ;; body of gt10
-                #(struct:function x #(struct:aop >= #(struct:id x) #(struct:num 10)))
-                ;; contract of gt10
-                #(struct:f-contract #(struct:function _ #(struct:bool #t)))
-                gt10
-                g)
-              #(struct:id x)))
-
-          #(struct:application
-            ;; obligation of lt15
-            #(struct:obligation
-              ;; body of lt15
-              #(struct:function x #(struct:condition #(struct:aop >= #(struct:id x) #(struct:num 15)) #(struct:id false) #(struct:id true)))
-              ;; contract of lt15
-              #(struct:f-contract #(struct:function _ #(struct:bool #t)))
-              lt15
-              g)
-            #(struct:id x))))))
-
-  ;; this is the body of g
-  #(struct:function x #(struct:rop - #(struct:id x) #(struct:num 10))))
-)
-(comment
-
-(g body)^{gt10 -> (and gt10 lt15)} 11
-
-==> ((g body) 11^{gt10})^{and gt10 lt15}
-
-==> ((g body) (if gt10(11) 11 error))^{and gt10 lt15}
-
-==> ((g body) 11)^{and gt10 lt15}
-
-11 goes to (lambda x (x >= 10))^{true, gt10, g}
-
-
-)

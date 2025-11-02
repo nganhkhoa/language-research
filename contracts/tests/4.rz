@@ -1,0 +1,15 @@
+(comment
+  function that returns a contract
+  and use that contract in a contract signature
+)
+
+(val rec gt = (lambda v (lambda x (x >= v))))
+(val rec lt = (lambda v (lambda x (if (x >= v) then #f else #t))))
+(val rec and = (lambda x (lambda y (if x then y else #f))))
+(val rec or = (lambda x (lambda y (if x then #t else y))))
+
+(val rec g
+  : ((contract (gt 10)) -> (contract (lambda x ((and ((gt 10) x)) ((lt 15) x)))))
+  = (lambda x (x - 10)))
+
+(g 11)
