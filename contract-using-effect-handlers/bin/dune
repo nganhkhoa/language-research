@@ -1,5 +1,8 @@
 (executable
  (public_name cueh)
  (name main)
- (libraries cueh))
+ (libraries cueh)
+
+ (ocamlopt_flags (:standard -dsource))
+ )
 

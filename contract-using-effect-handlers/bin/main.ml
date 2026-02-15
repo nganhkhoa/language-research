@@ -1,33 +1,83 @@
 open Effect.Deep
 
-let () = print_endline "Hello, World!"
+exception Blame of string
 
-exception Wrong of string
+type _ Effect.t += GetAdditionOperand : int Effect.t
+(* type _ Effect.t += SomeContractEffect : unit Effect.t *)
+
+(* suggestion syntax
+
+let [@contract] f
+
+  (x : t [@@pred ...] [@@allow-effect ...])
+  (y : t [@@pred ...])
+  : t [@@pred ...]
+      [@@allow-effect ...]
+
+  = body
+
+ *)
+
+let bigger_than_10 n =
+  (* Effect.perform SomeContractEffect; *)
+  n > 10
+
+let bigger_than_20 n =
+  n > 20
+
+let equal_10 n =
+  n = 10
 
 let f = fun x ->
   let module Local = struct
     type _ Effect.t += CheckParam1 : int -> unit Effect.t
-    type _ Effect.t += CheckReturn : int -> unit Effect.t
+    type _ Effect.t += CheckReturn : int -> int Effect.t
   end in
-  let predicate_1 v = v > 10 in
-  let predicate_ret v = v > 20 in
   match
     Effect.perform (Local.CheckParam1 x);
-    let ret = x + 1 in
-    Effect.perform (Local.CheckReturn ret);
-    ret
+
+    (* f can also do other effects, and we can constraint it
+       allowing certain effects, and if the effect returns,
+       must be able to "validate" it using contract
+
+       prob need a verbose version of this, with handlers
+       we can check if effect is one of ours Contract checking
+       or the allowed effects
+
+      infact, how verbose is the effect filter?
+      if we only allow certain effect, then only allow their effect
+      but if we also need to check the effect input, then we need
+      a predicate for that input checking
+
+      if we want to keep up with the Effectful Contract, then
+      we must rewrite with verbosity, using try_with
+     *)
+
+    let num = Effect.perform GetAdditionOperand in
+    let ret = x + num in
+    Effect.perform (Local.CheckReturn ret)
   with
   | res -> res
   | effect (Local.CheckParam1 v), k ->
       Printf.printf "F Check Param 1: %d\n" v;
-      if (predicate_1 v)
+      if bigger_than_10 v
       then continue k ()
-      else discontinue k (Wrong "F Param 1 Not Good")
+      else discontinue k (Blame "F Param 1 Not Good")
   | effect (Local.CheckReturn v), k ->
       Printf.printf "F Check Return Value: %d\n" v;
-      if (predicate_ret v)
-      then continue k ()
-      else discontinue k (Wrong "F Return Value Not Good")
+      if bigger_than_20 v
+      then continue k v
+      else discontinue k (Blame "F Return Value Not Good")
+
+  (* besides contract effects, only allow certain effects *)
+  | effect GetAdditionOperand, k ->
+      (* we catch this effect to check its result *)
+      let num = Effect.perform GetAdditionOperand in
+      Printf.printf "F Main Effect Check: %d\n" num;
+      (* only allowed values passing the predicate to pass *)
+      if (equal_10 num)
+      then continue k num
+      else discontinue k (Blame "F does not pass the effect filter")
 
 let g = fun f ->
   (* g can specify signature for f too
@@ -52,15 +102,20 @@ let g = fun f ->
         Printf.printf "G Check Param 1: %d\n" v;
         if (predicate_1 v)
         then continue k ()
-        else discontinue k (Wrong "G Param 1 Not Good")
+        else discontinue k (Blame "G Param 1 Not Good")
     | effect (Local.CheckReturn v), k ->
         Printf.printf "G Check Return Value: %d\n" v;
         if (predicate_ret v)
         then continue k ()
-        else discontinue k (Wrong "G Return Value Not Good")
+        else discontinue k (Blame "G Return Value Not Good")
   in
-  f_binded 16
+  f_binded 13
 
 let () =
-  let _ = g f in
-  ()
+  match
+    let _ = g f in
+    ()
+  with
+  | res -> res
+  | effect GetAdditionOperand, k ->
+      continue k 10
