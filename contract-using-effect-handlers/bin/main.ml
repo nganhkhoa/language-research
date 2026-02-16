@@ -3,7 +3,8 @@ open Effect.Deep
 exception Blame of string
 
 type _ Effect.t += GetAdditionOperand : int Effect.t
-(* type _ Effect.t += SomeContractEffect : unit Effect.t *)
+(* type _ Effect.t += CheckAdditionOperand : int -> bool Effect.t *)
+type _ Effect.t += SomeContractEffect : unit Effect.t
 
 (* suggestion syntax
 
@@ -18,8 +19,10 @@ let [@contract] f
 
  *)
 
+let [@contract] sample x = x
+
 let bigger_than_10 n =
-  (* Effect.perform SomeContractEffect; *)
+  Effect.perform SomeContractEffect;
   n > 10
 
 let bigger_than_20 n =
@@ -48,9 +51,6 @@ let f = fun x ->
       if we only allow certain effect, then only allow their effect
       but if we also need to check the effect input, then we need
       a predicate for that input checking
-
-      if we want to keep up with the Effectful Contract, then
-      we must rewrite with verbosity, using try_with
      *)
 
     let num = Effect.perform GetAdditionOperand in
@@ -58,28 +58,77 @@ let f = fun x ->
     Effect.perform (Local.CheckReturn ret)
   with
   | res -> res
-  | effect (Local.CheckParam1 v), k ->
-      Printf.printf "F Check Param 1: %d\n" v;
-      if bigger_than_10 v
-      then continue k ()
-      else discontinue k (Blame "F Param 1 Not Good")
-  | effect (Local.CheckReturn v), k ->
-      Printf.printf "F Check Return Value: %d\n" v;
-      if bigger_than_20 v
-      then continue k v
-      else discontinue k (Blame "F Return Value Not Good")
 
-  (* besides contract effects, only allow certain effects *)
+  (* besides contract effects, only allow certain effects
+
+     Main Contract Handler, perform the effect again to push
+     to parent (registered) handler
+   *)
   | effect GetAdditionOperand, k ->
       (* we catch this effect to check its result *)
       let num = Effect.perform GetAdditionOperand in
       Printf.printf "F Main Effect Check: %d\n" num;
       (* only allowed values passing the predicate to pass *)
-      if (equal_10 num)
+      if equal_10 num
       then continue k num
       else discontinue k (Blame "F does not pass the effect filter")
 
-let g = fun f ->
+  (* else we only need to care about Contract checking for parameters
+     built as effects
+   *)
+  | effect e, k ->
+      match
+        begin
+        match e with
+        (* this also register a Contract-Effect Handler
+
+           This contract (predicate) can perform certain effects, and disallow (?) the rest
+           this contract also has a guard (for effect request)
+
+           state?
+         *)
+        | Local.CheckParam1 v ->
+            Printf.printf "F Check Param 1: %d\n" v;
+            (* Contract-Effect Handler installed
+
+               what if we want to keep a state? bigger_than_10 calls SomeContractEffect
+               many times, and want to compare results across effect calls
+               we can use a state to control, regardless, this handler
+               is written by the user, and we can let the user define their state
+               the param check only calls once though
+
+               but if param1 param2 calls the same effect and wants to track between them?
+               what about return value?
+             *)
+            let check_passed =
+              match bigger_than_10 v with
+              | res -> res
+              | effect SomeContractEffect, kk ->
+                  Printf.printf "Contract can call effect\n";
+                  continue kk ()
+            in
+            if check_passed
+            then continue k ()
+            else discontinue k (Blame "F Check Param 1 contract error")
+
+        | Local.CheckReturn v ->
+            Printf.printf "F Check Return Value: %d\n" v;
+            if bigger_than_20 v
+            then continue k v
+            else discontinue k (Blame "F Return Value Not Good")
+
+        | _ ->
+            discontinue k (Blame "F effect disallow")
+        end
+      with
+      | res -> res
+      | effect GetAdditionOperand, k ->
+          (* Contract-Handler Contract
+             if the contract perform other effects, this catches
+           *)
+          discontinue k (Blame "F some other effects called during contract checking --> disallowed")
+
+let g = fun f x ->
   (* g can specify signature for f too
      we wrap f again, by default, it should perform as we would
      expect in normal contract checking
@@ -87,15 +136,14 @@ let g = fun f ->
   let f_binded = fun x ->
     let module Local = struct
       type _ Effect.t += CheckParam1 : int -> unit Effect.t
-      type _ Effect.t += CheckReturn : int -> unit Effect.t
+      type _ Effect.t += CheckReturn : int -> int Effect.t
     end in
     let predicate_1 v = v < 15 in
     let predicate_ret v = v < 25 in
     match
       Effect.perform (Local.CheckParam1 x);
       let ret = f x in
-      Effect.perform (Local.CheckReturn ret);
-      ret
+      Effect.perform (Local.CheckReturn ret)
     with
     | res -> res
     | effect (Local.CheckParam1 v), k ->
@@ -106,14 +154,15 @@ let g = fun f ->
     | effect (Local.CheckReturn v), k ->
         Printf.printf "G Check Return Value: %d\n" v;
         if (predicate_ret v)
-        then continue k ()
+        then continue k v
         else discontinue k (Blame "G Return Value Not Good")
   in
-  f_binded 13
+  f_binded x
 
 let () =
   match
-    let _ = g f in
+    let num = read_int () in
+    let _ = g f num in
     ()
   with
   | res -> res

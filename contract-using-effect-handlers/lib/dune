@@ -1,2 +1,7 @@
 (library
- (name cueh))
+ (name sceh)
+ (public_name cueh.ppx_sceh)
+ (kind ppx_rewriter)
+ (libraries ppxlib)
+ (preprocess (pps ppxlib.metaquot))
+ (flags (:standard -w -11-26-27-32-33-34-35-37-38-39)))

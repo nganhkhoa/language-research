@@ -7,9 +7,9 @@
 (source
  (github username/reponame))
 
-(authors "Author Name <author@example.com>")
+(authors "Anh-Khoa <nganhkhoa@u.northwestern.edu>")
 
-(maintainers "Maintainer Name <maintainer@example.com>")
+(maintainers "Anh-Khoa <nganhkhoa@u.northwestern.edu>")
 
 (license LICENSE)
 
@@ -17,10 +17,8 @@
 
 (package
  (name cueh)
- (synopsis "A short synopsis")
- (description "A longer description")
+ (synopsis "Software Contract using Effect Handlers")
+ (description "Implementing Software Contract using Effect Handlers")
  (depends ocaml)
  (tags
-  ("add topics" "to describe" your project)))
-
-; See the complete stanza docs at https://dune.readthedocs.io/en/stable/reference/dune-project/index.html
+  ("software contract" "effect handlers" "theory")))

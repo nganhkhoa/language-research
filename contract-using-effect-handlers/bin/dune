@@ -1,8 +1,7 @@
 (executable
- (public_name cueh)
+ (public_name main)
  (name main)
- (libraries cueh)
-
+ (preprocess (pps cueh.ppx_sceh))
  (ocamlopt_flags (:standard -dsource))
- )
+ (flags (:standard -w -11-26-27-32-33-34-35-37-38-39)))
 
