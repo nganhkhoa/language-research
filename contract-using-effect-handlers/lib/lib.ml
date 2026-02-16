@@ -81,36 +81,46 @@ let make_contract_module loc num_args =
     ~name:(Located.mk ~loc (Some "Local"))
     ~expr:(pmod_structure ~loc module_items))
 
+let wrap_with_effects (vb : value_binding) params types body_expr =
+  let loc = vb.pvb_loc in
+  let local_module = make_contract_module loc (List.length params) in
+
+  let new_body = pexp_letmodule ~loc
+    (Located.mk ~loc (Some "Local"))
+    (match local_module.pstr_desc with Pstr_module mb -> mb.pmb_expr | _ -> assert false)
+    body_expr
+  in
+
+  pexp_function ~loc params (Some types) (Pfunction_body new_body)
+
+let transform_contract_wrapper (vb : value_binding) =
+  match vb.pvb_expr.pexp_desc with
+  (* for now only transform a function annotated with [@contract]
+     we require type signature, because the predicate contract will be
+     attached to the type signature
+     we only work for body expression, for function match cases, we ignore
+  *)
+  | Pexp_function (params, Some types, Pfunction_body body) ->
+      { vb with
+        pvb_expr = wrap_with_effects vb params types body;
+        pvb_attributes = [];
+      }
+
+  | _ -> vb
+
 let expander =
   object
     inherit Ast_traverse.map as super
 
     method! value_binding vb =
-      (* Always call super first to handle nested lets correctly (Post-order) *)
-      let vb = super#value_binding vb in
+      (* Format.eprintf "Transforming: %a@." Pprintast.expression vb.pvb_expr; *)
       match Attribute.get contract_attr vb with
       | Some () ->
-        Format.eprintf "Transforming: %a@." Pprintast.expression vb.pvb_expr;
-        let loc = vb.pvb_loc in
-        let (args, original_body) = collect_args vb.pvb_expr [] in
-        let num_args = List.length args in
-
-        (* Construct the local module item *)
-        let local_module = make_contract_module loc num_args in
-
-        (* Inject: let module Local = ... in body *)
-        let new_body = pexp_letmodule ~loc
-          (Located.mk ~loc (Some "Local"))
-          (match local_module.pstr_desc with Pstr_module mb -> mb.pmb_expr | _ -> assert false)
-          original_body
-        in
-
-        (* Re-wrap with original function arguments *)
-        { vb with
-          pvb_expr = rebuild_fun loc args new_body;
-          pvb_attributes = []
-        }
-      | None -> vb
+          let transformed_vb = transform_contract_wrapper vb in
+          let recursive_expr = super#expression transformed_vb.pvb_expr in
+          { transformed_vb with pvb_expr = recursive_expr }
+      | None ->
+          super#value_binding vb
   end
 
 (* 3. Register the transformation *)
