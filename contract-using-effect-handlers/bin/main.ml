@@ -88,8 +88,6 @@ let () =
   let run = run "run" __FUNCTION__ in
   (* let _ = run 21 in *)
 
-  let shud_good _ = 41 in
-
   (* run_function says I will always call f with >30
      any f provided to me shud returns >40, else it's
      the provider's (server) fault
@@ -97,5 +95,5 @@ let () =
   let shud_not_good = run in
 
   let run_function = run_function "run_function" __FUNCTION__ in
-  let _ = run_function shud_good 34 in
+  let _ = run_function shud_not_good 34 in
   ()

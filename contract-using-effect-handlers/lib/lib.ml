@@ -65,6 +65,32 @@ let build_contract_module ~loc (params : (string * core_type) list) (rettype : c
   pmod_structure ~loc effects
 
 let build_function_wrappers ~loc params body =
+  (* for any params f that is a function builds
+
+     form of f (f : t0 [@pre : predicate0] -> ... -> tR [@post : predicateR])
+
+     let [@contract] f (__p0 : [@pre : predicate0]) ... : tR [@post : predicateR] =
+       f __p0 ....
+     in
+     (* flip blame assignment
+        inputs are blamed negative (2nd argument)
+        output is  blamed positive (1st argument)
+
+        parent function says, I will always call f with correct argument
+        so if inputs are wrong, it's the fault of caller
+        if f is provided with correct argument, it should output correctly
+        else, who provided f is at fault
+
+        the implementation has problem:
+          if we just flip it like this, say f needs g
+          then g will flip pos neg again, and it will be incorrect
+          instead, we think that it should be
+          or more correctly, appending function to this
+          __FUNCTION__ pos
+      *)
+     let f = f neg pos in
+   *)
+
   List.fold_left (fun acc_body (name, ct) ->
     let lid_loc = Located.mk ~loc (Lident name) in
     let str_loc = Located.mk ~loc name in
@@ -105,7 +131,7 @@ let build_function_wrappers ~loc params body =
     (* let f = f neg pos *)
     let blame_f_vb =
       let apply_blame = Exp.apply ~loc (Exp.ident ~loc lid_loc) [
-        (Nolabel, Exp.ident ~loc (Located.mk ~loc (Lident "neg")));
+        (Nolabel, Exp.ident ~loc (Located.mk ~loc (Lident "__FUNCTION__")));
         (Nolabel, Exp.ident ~loc (Located.mk ~loc (Lident "pos")))
       ] in
       Vb.mk ~loc (Pat.var ~loc str_loc) apply_blame
