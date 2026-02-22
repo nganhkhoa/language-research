@@ -1,29 +1,33 @@
-let bigger_than_10 x = x > 10
+exception Blame of string
 
-let [@contract] run
-  (x : int [@pred : bigger_than_10])
-  : int [@pred : bigger_than_10] =
-  x
+let bigger_than_10 x =
+  Printf.printf "must > 10\n";
+  x > 10
+let bigger_than_20 x =
+  Printf.printf "must > 20\n";
+  x > 20
+let bigger_than_30 x =
+  Printf.printf "must > 30\n";
+  x > 30
+let bigger_than_40 x =
+  Printf.printf "must > 40\n";
+  x > 40
+
+let
+  [@contract]
+  [@effect : effect_A -> check_effectA_return ]
+  run
+  (x : int [@pre : bigger_than_10])
+  : int [@post : bigger_than_20] =
+  x + 1
 
 let [@contract] run_function
-  (f : int -> int [@pred : bigger_than_10 -> bigger_than_10])
-  (x : int [@pred : bigger_than_10])
-  : int [@pred : bigger_than_10]
+  (f : (int [@pre : bigger_than_30])
+     -> (int [@post : bigger_than_40]))
+  (x : int [@pre : bigger_than_20])
+  : int [@post : bigger_than_10]
   =
-    (* originally
-         f x
-       because f is a function (we know from the type signature)
-       we build a wrapped version, only if it is annotated with
-       a contract; else we leave f as is
-       because of f isolation, we can make parameter names for it
-       p1 p2 p3 ...
-     *)
-  let [@contract] f_wrapped
-    (p1 : int [@pred : bigger_than_10])
-    : int [@pred : bigger_than_10]
-    = f p1
-  in
-  f_wrapped x
+    f x
 
 (* by transformation we expect it to build in multiple phases due to how
    traversal works
@@ -75,3 +79,23 @@ let [@contract] run_function
 (* let () =
   let open Sample_code in
   run_test *)
+
+(* let () =
+  let open Pair_projection in
+  run_test *)
+
+let () =
+  let run = run "run" __FUNCTION__ in
+  (* let _ = run 21 in *)
+
+  let shud_good _ = 41 in
+
+  (* run_function says I will always call f with >30
+     any f provided to me shud returns >40, else it's
+     the provider's (server) fault
+   *)
+  let shud_not_good = run in
+
+  let run_function = run_function "run_function" __FUNCTION__ in
+  let _ = run_function shud_good 34 in
+  ()

@@ -1,6 +1,9 @@
 open Effect
 open Ppxlib
+open Ast_helper
 open Ast_builder.Default
+
+open Mytypes
 
 let contract_attr =
   Attribute.declare "contract"
@@ -32,66 +35,250 @@ let rec collect_args expr acc =
       (params, actual_body)
   | _ -> ([], expr)
 
-(* Helper to rebuild the function after injecting code *)
-let rebuild_fun loc params body_expr =
-  let body_kind = Pfunction_body body_expr in
-  (* We pass None for the constraint (return type) for now,
-     or you can pass the original one if you captured it. *)
-  pexp_function ~loc params None body_kind
+let build_contract_module ~loc (params : (string * core_type) list) (rettype : core_type) =
+  (* build all effect types for use as the contract effect *)
 
-let make_param_effect loc name =
-  (* 1. Create the name for the effect constructor (e.g., CheckParam1) *)
-  let constructor_name = Located.mk ~loc name in
+  let to_effects = ("_ret", rettype) :: params in
 
-  let unit_node = ptyp_constr ~loc (Located.mk ~loc (Lident "unit")) [] in
+  let effects =
+    List.map (fun (name, ct) ->
+      let effect_name = Located.mk ~loc (Printf.sprintf "ContractCheck_%s" name) in
 
-  (* 2. Define the argument: 'a *)
-  let arg_type = [%type: int] in
-  let res_type = ptyp_constr ~loc (effect_t_path ~loc) [unit_node] in
+      let unit_node = ptyp_constr ~loc (Located.mk ~loc (Lident "unit")) [] in
+      let effect_t = ptyp_constr ~loc (effect_t_path ~loc) [unit_node] in
 
-  (* 4. Construct the extension: type _ Effect.t += ... *)
-  pstr_typext ~loc (type_extension ~loc
-    ~path:(effect_t_path ~loc)
-    ~params:[ (ptyp_any ~loc, (NoVariance, NoInjectivity)) ]
-    ~constructors:[
-      extension_constructor ~loc
-        ~name:constructor_name
-        ~kind:(Pext_decl ([], Pcstr_tuple [arg_type], Some res_type))
-    ]
-    ~private_:Public)
+      let path = effect_t_path ~loc in
+      let params = [ (ptyp_any ~loc, (NoVariance, NoInjectivity)) ] in
+      let constructors = [
+        extension_constructor ~loc
+          ~name:effect_name
+          ~kind:(Pext_decl ([], Pcstr_tuple [ct], Some effect_t))
+      ]
+      in
 
-let make_contract_module loc num_args =
-  (* Generate list of CheckParam1, CheckParam2, etc. *)
-  let param_effects = List.init num_args (fun i ->
-    let name = Printf.sprintf "CheckParam%d" (i + 1) in
-    make_param_effect loc name
-  ) in
-
-  (* For the Return effect, we can use a literal if the name doesn't change *)
-
-  let ret_type = [%type: int] in
-  let return_effect =
-    [%str type _ Effect.t += CheckReturn : [%t ret_type] -> unit Effect.t]
+      pstr_typext ~loc
+        (type_extension ~loc ~path ~params ~constructors ~private_:Public)
+    )
+    to_effects
   in
 
-  let module_items = param_effects @ return_effect in
+  pmod_structure ~loc effects
 
-  (* Build: module Local = struct ... end *)
-  pstr_module ~loc (module_binding ~loc
-    ~name:(Located.mk ~loc (Some "Local"))
-    ~expr:(pmod_structure ~loc module_items))
+let build_function_wrappers ~loc params body =
+  List.fold_left (fun acc_body (name, ct) ->
+    let lid_loc = Located.mk ~loc (Lident name) in
+    let str_loc = Located.mk ~loc name in
 
-let wrap_with_effects (vb : value_binding) params types body_expr =
+    let (args_types, ret_type) = flatten_arrow_type ct in
+    let p_names = List.mapi (fun i _ -> Printf.sprintf "__p%d" i) args_types in
+
+    (* f __p0 __p1 ... *)
+    let apply_f = Exp.apply ~loc (Exp.ident ~loc lid_loc)
+      (List.map (fun p -> (Nolabel, Exp.ident ~loc (Located.mk ~loc (Lident p)))) p_names) in
+
+    let shadow_f_vb =
+      (* 1. Build the params as you did before *)
+      let params = List.map2 (fun p_name p_type ->
+        let pat = Pat.constraint_ ~loc (Pat.var ~loc (Located.mk ~loc p_name)) p_type in
+        { pparam_desc = Pparam_val (Nolabel, None, pat); pparam_loc = loc }
+      ) p_names args_types in
+
+      (* 2. Manually construct the Pexp_function descriptor *)
+      (* This matches your recursive pattern exactly *)
+      let fn_desc = Pexp_function (
+        params,
+        Some (Pconstraint ret_type),
+        Pfunction_body apply_f
+      ) in
+
+      (* 3. Use Exp.mk to create the expression node *)
+      let fn_expr = Exp.mk ~loc fn_desc in
+      let attr = {
+        attr_name = Located.mk ~loc "contract";
+        attr_payload = PStr []; (* Empty payload for [@contract] *)
+        attr_loc = loc;
+      } in
+
+      { (Vb.mk ~loc (Pat.var ~loc str_loc) fn_expr) with pvb_attributes = [attr] }
+    in
+
+    (* let f = f neg pos *)
+    let blame_f_vb =
+      let apply_blame = Exp.apply ~loc (Exp.ident ~loc lid_loc) [
+        (Nolabel, Exp.ident ~loc (Located.mk ~loc (Lident "neg")));
+        (Nolabel, Exp.ident ~loc (Located.mk ~loc (Lident "pos")))
+      ] in
+      Vb.mk ~loc (Pat.var ~loc str_loc) apply_blame
+    in
+
+    Exp.let_ ~loc Nonrecursive [shadow_f_vb]
+      (Exp.let_ ~loc Nonrecursive [blame_f_vb] acc_body)
+
+  ) body params
+
+let build_wrapped_body ~loc (params : (string * core_type) list) (rettype : core_type) body =
+  (* we wrap the body into
+
+    where cases are ContractCheck_params and ContractCheck__ret
+    params holds the type constraints, which have the attributes
+    the predicate for params are in [@pre] and for retrun value in [@post]
+
+    ContractCheck_params p -> Some(fun k ->
+      let allow = match predicate p with
+        | v -> v
+      in
+      if allow
+      then continue k ()
+      else discontinue k (Blame pos)
+    )
+
+    ContractCheck__ret p -> Some(fun k ->
+      let allow = match predicate p with
+        | v -> v
+      in
+      if allow
+      then continue k ()
+      else discontinue k (Blame neg)
+    )
+
+    ====
+
+    let handler =
+      {
+        retc = (fun x -> x)
+        exnc = (fun e -> raise e)
+        effc = fun (type e) (eff : e Effect.t) ->
+          match eff with
+          | cases
+      }
+    in
+    Effect.Deep.match_with (fun () ->
+      Effect.perform (LocalContract (ContractCheck_param1));
+      Effect.perform (LocalContract (ContractCheck_param2));
+      let __ret__ = body in
+      Effect.perform (LocalContract (ContractCheck__ret __ret__));
+      __ret__
+    ) ()
+    handler
+   *)
+  (* 1. Generate Case for a Single Parameter/Return *)
+  let make_check_case name ct is_post =
+    let pred = get_predicate ~loc (if is_post then "post" else "pre") ct in
+    let blame_label = if is_post then "pos" else "neg" in
+    let attr_label = if is_post then "post" else "pre" in
+
+    let eff_name = if is_post then "ContractCheck__ret" else "ContractCheck_" ^ name in
+    let lid = Ldot (Lident "LocalContract", eff_name) in
+    let lhs = Pat.construct ~loc (Located.mk ~loc lid) (Some [%pat? p]) in
+
+    let pred = get_predicate ~loc attr_label ct in
+
+    (* RHS: Some (fun k -> if (pred p) then continue k () else discontinue ...) *)
+    let rhs = [%expr Some (fun k ->
+      let allow = [%e Exp.apply ~loc pred [Nolabel, [%expr p]]] in
+      if allow then
+        Effect.Deep.continue k ()
+      else
+        Effect.Deep.discontinue k (Blame [%e Exp.ident ~loc (Located.mk ~loc (Lident blame_label))])
+    )] in
+    Exp.case lhs rhs
+  in
+
+  let non_function_params_map = List.filter (fun (_, ct) -> not (is_function ct)) params in
+  let is_function_params_map = List.filter (fun (_, ct) -> is_function ct) params in
+
+  (* 2. Build the Handlers list *)
+  let param_cases = List.map (fun (name, ct) -> make_check_case name ct false) non_function_params_map in
+  let ret_case = make_check_case "_ret" rettype true in
+  let default_case = Exp.case [%pat? _] [%expr None] in
+
+  (* 3. Build the Instrumented Body (The 'fun () -> ...' block) *)
+  let performs = List.map (fun (name, _) ->
+    let eff_name = "ContractCheck_" ^ name in
+    let lid = Ldot (Lident "LocalContract", eff_name) in
+    let constr = Located.mk ~loc lid in
+    let arg = Exp.ident ~loc (Located.mk ~loc (Lident name)) in
+    [%expr Effect.perform ([%e Exp.construct ~loc constr (Some arg)])]
+  ) non_function_params_map in
+
+  let instrumented_body =
+    let return_instrumentation = [%expr
+      let __ret__ = [%e body] in
+      Effect.perform (LocalContract.ContractCheck__ret __ret__);
+      __ret__
+    ] in
+    List.fold_right (fun p acc -> Exp.sequence ~loc p acc) performs return_instrumentation
+  in
+
+  let build_effc_expr ~loc param_cases ret_case default_case =
+    let all_cases = param_cases @ [ret_case; default_case] in
+
+    (* 1. Build the match WITHOUT (type a).
+       We use 'eff' which will be bound by the arrow type later. *)
+    let match_eff = Exp.match_ ~loc [%expr eff] all_cases in
+    let match_constraint =
+      [%type: ( (e, b) Effect.Deep.continuation -> b) option]
+    in
+    let constrained_match = Exp.constraint_ ~loc match_eff match_constraint in
+
+    [%expr fun (type b) (type e) (eff : e Effect.t) -> [%e constrained_match]]
+  in
+
+  (* function params *)
+
+
+  let effc_fn = build_effc_expr ~loc param_cases ret_case default_case in
+
+  let main_catcher =
+    [%expr
+      let __contract_handler__ = {
+        Effect.Deep.retc = (fun x -> x);
+        exnc = (fun e -> raise e);
+        effc = [%e effc_fn];
+      } in
+      Effect.Deep.match_with (fun () -> [%e instrumented_body]) () __contract_handler__
+    ]
+  in
+
+  build_function_wrappers ~loc is_function_params_map main_catcher
+
+let wrap_with_effects (vb : value_binding) params rettype body_expr =
+  let pparams =
+    List.map (fun param ->
+      match param.pparam_desc with
+      | Pparam_newtype _ -> None
+      | Pparam_val (_, _, pat) ->
+          match pat.ppat_desc with
+          | Ppat_constraint (p, ct) ->
+              begin
+                match p.ppat_desc with
+                | Ppat_var name -> Some (name.txt, ct)
+                | _ -> None
+              end
+          | _ -> None
+    ) params
+    |> List.filter_map (fun x -> x)
+  in
+
+  let non_function_params_map = List.filter (fun (_, ct) -> not (is_function ct)) pparams in
+  let is_function_params_map = List.filter (fun (_, ct) -> is_function ct) pparams in
+
   let loc = vb.pvb_loc in
-  let local_module = make_contract_module loc (List.length params) in
+  let contract_module = build_contract_module ~loc non_function_params_map rettype in
+
+  let wrapped_body = build_wrapped_body ~loc pparams rettype body_expr in
 
   let new_body = pexp_letmodule ~loc
-    (Located.mk ~loc (Some "Local"))
-    (match local_module.pstr_desc with Pstr_module mb -> mb.pmb_expr | _ -> assert false)
-    body_expr
+    (Located.mk ~loc (Some "LocalContract"))
+    contract_module
+    wrapped_body
   in
 
-  pexp_function ~loc params (Some types) (Pfunction_body new_body)
+  let pos_param = mk_string_param ~loc "pos" in
+  let neg_param = mk_string_param ~loc "neg" in
+  let new_params = pos_param :: neg_param :: params in
+
+  pexp_function ~loc new_params (Some (Pconstraint rettype)) (Pfunction_body new_body)
 
 let transform_contract_wrapper (vb : value_binding) =
   match vb.pvb_expr.pexp_desc with
@@ -100,9 +287,9 @@ let transform_contract_wrapper (vb : value_binding) =
      attached to the type signature
      we only work for body expression, for function match cases, we ignore
   *)
-  | Pexp_function (params, Some types, Pfunction_body body) ->
+  | Pexp_function (params, Some (Pconstraint rettype), Pfunction_body body) ->
       { vb with
-        pvb_expr = wrap_with_effects vb params types body;
+        pvb_expr = wrap_with_effects vb params rettype body;
         pvb_attributes = [];
       }
 
