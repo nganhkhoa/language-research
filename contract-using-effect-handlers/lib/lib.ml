@@ -96,7 +96,7 @@ let build_function_wrappers ~loc params body =
     let str_loc = Located.mk ~loc name in
 
     let (args_types, ret_type) = flatten_arrow_type ct in
-    let p_names = List.mapi (fun i _ -> Printf.sprintf "__p%d" i) args_types in
+    let p_names = List.mapi (fun i _ -> Printf.sprintf "__%s__p%d" name i) args_types in
 
     (* f __p0 __p1 ... *)
     let apply_f = Exp.apply ~loc (Exp.ident ~loc lid_loc)
@@ -131,14 +131,36 @@ let build_function_wrappers ~loc params body =
     (* let f = f neg pos *)
     let blame_f_vb =
       let apply_blame = Exp.apply ~loc (Exp.ident ~loc lid_loc) [
-        (Nolabel, Exp.ident ~loc (Located.mk ~loc (Lident "__FUNCTION__")));
-        (Nolabel, Exp.ident ~loc (Located.mk ~loc (Lident "pos")))
+        (* put current pos neg as argument, to prevent shadowing *)
+        (Nolabel, Exp.ident ~loc (Located.mk ~loc (Lident "pos")));
+        (Nolabel, Exp.ident ~loc (Located.mk ~loc (Lident "neg")))
       ] in
       Vb.mk ~loc (Pat.var ~loc str_loc) apply_blame
     in
 
-    Exp.let_ ~loc Nonrecursive [shadow_f_vb]
-      (Exp.let_ ~loc Nonrecursive [blame_f_vb] acc_body)
+    let swap_vb =
+      let pat = Pat.tuple ~loc [
+        Pat.var ~loc (Located.mk ~loc "pos");
+        Pat.var ~loc (Located.mk ~loc "neg")
+      ] in
+      let exp = Exp.tuple ~loc [
+        Exp.ident ~loc (Located.mk ~loc (Lident "neg"));
+        Exp.ident ~loc (Located.mk ~loc (Lident "pos"))
+      ] in
+      Vb.mk ~loc pat exp
+    in
+
+    (* let pos, neg = neg, pos in
+       let f = match_with
+         f p
+       in
+       let f = f neg pos in
+       acc_body *)
+      Exp.let_ ~loc Nonrecursive [swap_vb] (
+        Exp.let_ ~loc Nonrecursive [shadow_f_vb] (
+          Exp.let_ ~loc Nonrecursive [blame_f_vb] acc_body
+        )
+      )
 
   ) body params
 
@@ -190,7 +212,7 @@ let build_wrapped_body ~loc (params : (string * core_type) list) (rettype : core
   (* 1. Generate Case for a Single Parameter/Return *)
   let make_check_case name ct is_post =
     let pred = get_predicate ~loc (if is_post then "post" else "pre") ct in
-    let blame_label = if is_post then "pos" else "neg" in
+    let blame_label = if is_post then "neg" else "pos" in
     let attr_label = if is_post then "post" else "pre" in
 
     let eff_name = if is_post then "ContractCheck__ret" else "ContractCheck_" ^ name in

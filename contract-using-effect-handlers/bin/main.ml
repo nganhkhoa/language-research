@@ -21,13 +21,62 @@ let
   : int [@post : bigger_than_20] =
   x + 1
 
-let [@contract] run_function
+let [@contract] run_function pos neg
   (f : (int [@pre : bigger_than_30])
      -> (int [@post : bigger_than_40]))
   (x : int [@pre : bigger_than_20])
   : int [@post : bigger_than_10]
   =
     f x
+
+let g x = x
+let wrong g = g 11
+
+let [@contract] test
+  (f : ((int [@pre : bigger_than_20]) -> (int [@post : bigger_than_10]))
+     -> (int [@post : bigger_than_10]))
+  : int [@post : bigger_than_10]
+  =
+    (*
+    let wrapped_f = fun pos neg g ->
+      + "main"
+      - "test"
+
+      let wrapped_g = fun pos neg x ->
+        - "test"
+        + "main"
+        g x
+      in
+      let g = wrapped_g pos neg in
+    in
+    let f = wrapped_f neg pos in
+    *)
+
+    (*
+
+    + "test"
+    - "main"
+    let wrapped_f = fun pos neg g ->
+      let (pos, neg) = neg, pos in
+      + "main"
+      - "test"
+
+      let wrapped_g = fun pos neg x ->
+        let (pos, neg) = neg, pos in
+        + "test"
+        - "main"
+        g x
+      in
+      let g = wrapped_g pos neg in
+    in
+    let f = wrapped_f pos neg in
+     *)
+    f g
+
+let () =
+  let test = test "test" __FUNCTION__ in
+  let _ = test wrong in
+  ()
 
 (* by transformation we expect it to build in multiple phases due to how
    traversal works
@@ -83,7 +132,7 @@ let [@contract] run_function
 (* let () =
   let open Pair_projection in
   run_test *)
-
+(*
 let () =
   let run = run "run" __FUNCTION__ in
   (* let _ = run 21 in *)
@@ -96,4 +145,4 @@ let () =
 
   let run_function = run_function "run_function" __FUNCTION__ in
   let _ = run_function shud_not_good 34 in
-  ()
+  () *)
